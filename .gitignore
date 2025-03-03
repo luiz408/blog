@@ -4,6 +4,7 @@
 gunicorn-error-log
 __localcode
 /data/
+codigos.py
 
 # Django #
 *.log
@@ -133,6 +134,7 @@ Control.ca-list
 Control.ca-bundle
 Control.system-ca-bundle
 GitHub.sublime-settings
+
 
 # Visual Studio Code #
 .vscode/*
