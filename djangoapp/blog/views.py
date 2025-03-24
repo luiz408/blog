@@ -5,8 +5,8 @@ from django.contrib.auth.models import User
 from django.core.paginator import Paginator
 from django.db.models import Q
 from django.db.models.query import QuerySet
-from django.http import Http404, HttpRequest, HttpResponse
-from django.shortcuts import redirect, render
+from django.http import Http404
+from django.shortcuts import render, redirect
 from django.views.generic import ListView
 
 PER_PAGE = 9
@@ -20,11 +20,9 @@ class PostListView(ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-
         context.update({
             'page_title': 'Home - ',
         })
-
         return context
 
 
@@ -34,8 +32,7 @@ def created_by(request, author_pk):
     if user is None:
         raise Http404()
 
-    posts = Post.objects.get_published()\ # type: ignore
-        .filter(created_by__pk=author_pk)  # type: ignore
+    posts = Post.objects.get_published().filter(created_by__pk=author_pk) # type: ignore
     user_full_name = user.username
 
     if user.first_name:
@@ -73,7 +70,6 @@ class CreatedByListView(PostListView):
         ctx.update({
             'page_title': page_title,
         })
-
         return ctx
 
     def get_queryset(self) -> QuerySet[Any]:
@@ -117,12 +113,13 @@ class CategoryListView(PostListView):
 
 
 class TagListView(PostListView):
-     allow_empty = False
+    allow_empty = False
 
     def get_queryset(self) -> QuerySet[Any]:
         return super().get_queryset().filter(
             tags__slug=self.kwargs.get('slug')
         )
+
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         page_title = (
@@ -135,52 +132,36 @@ class TagListView(PostListView):
         return ctx
 
 
-def tag(request, slug):
-    posts = Post.objects.get_published()\  # type: ignore
-        .filter(tags__slug=slug)  # type: ignore
+class SearchListView(PostListView):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._search_value = ''
 
-    paginator = Paginator(posts, PER_PAGE)
-    page_number = request.GET.get("page")
-    page_obj = paginator.get_page(page_number)
+    def setup(self, request, *args, **kwargs):
+        self._search_value = request.GET.get('search', '').strip()
+        return super().setup(request, *args, **kwargs)
 
-    if len(page_obj) == 0:
-        raise Http404()
-
-    page_title = f'{page_obj[0].tags.first().name} - Tag - '
-
-    return render(
-        request,
-        'blog/pages/index.html',
-        {
-            'page_obj': page_obj,
-            'page_title': page_title,
-        }
-    )
-
-
-def search(request):
-    search_value = request.GET.get('search', '').strip()
-
-    posts = (
-        Post.objects.get_published()  # type: ignore
-        .filter(
+    def get_queryset(self) -> QuerySet[Any]:
+        search_value = self._search_value
+        return super().get_queryset().filter(
             Q(title__icontains=search_value) |
             Q(excerpt__icontains=search_value) |
             Q(content__icontains=search_value)
         )[:PER_PAGE]
-    )
 
-    page_title = f'{search_value[:30]} - Search - '
-
-    return render(
-        request,
-        'blog/pages/index.html',
-        {
-            'page_obj': posts,
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        search_value = self._search_value
+        ctx.update({
+            'page_title': f'{search_value[:30]} - Search - ',
             'search_value': search_value,
-            'page_title': page_title,
-        }
-    )
+        })
+        return ctx
+
+    def get(self, request, *args, **kwargs):
+        if self._search_value == '':
+            return redirect('blog:index')
+        return super().get(request, *args, **kwargs)
 
 
 def page(request, slug):
@@ -208,7 +189,7 @@ def page(request, slug):
 
 def post(request, slug):
     post_obj = (
-        Post.objects.get_published()  # type: ignore
+        Post.objects.get_published() # type: ignore
         .filter(slug=slug)
         .first()
     )
